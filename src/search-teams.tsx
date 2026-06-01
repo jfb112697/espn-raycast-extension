@@ -6,6 +6,7 @@ import {
   Icon,
   Image,
   LaunchProps,
+  LaunchType,
   List,
 } from "@raycast/api";
 import { createDeeplink, useFetch } from "@raycast/utils";
@@ -55,9 +56,12 @@ function quicklinkFor(
 ): { name: string; link: string } {
   return {
     name,
+    // userInitiated brings Raycast to the foreground on launch; without it the
+    // quicklink can run without surfacing the window.
     link: createDeeplink({
       command: "search-teams",
-      context: context as unknown as Record<string, unknown>,
+      launchType: LaunchType.UserInitiated,
+      context,
     }),
   };
 }
@@ -193,8 +197,13 @@ function buildTeamMarkdown(
   bio: TeamBio,
   events: ScheduleEvent[],
 ): string {
-  const upcoming = events.filter(isUpcoming).slice(0, 8);
-  const completed = events.filter(isCompleted).reverse().slice(0, 5);
+  // Sort ascending by date — events may be merged from two endpoints (soccer)
+  // and arrive out of order.
+  const sorted = [...events].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+  const upcoming = sorted.filter(isUpcoming).slice(0, 8);
+  const completed = sorted.filter(isCompleted).slice(-5).reverse();
 
   // Header: logo on the left, identity on the right (mirrors the player page) so
   // the top is balanced instead of a lone oversized logo, and the schedule
@@ -566,7 +575,22 @@ function TeamDetailView({
   const scheduleUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/teams/${teamId}/schedule`;
   const { data, isLoading } = useFetch<ScheduleResponse>(scheduleUrl);
 
-  const events = data?.events ?? [];
+  // Soccer is split across competitions: a club's games live under its league
+  // slug (e.g. eng.1) while national-team games are spread across many
+  // competitions and only show up under the special "all" league — and the two
+  // are mutually exclusive per team. Fetch both and merge so either case works.
+  const isSoccer = sport === "soccer";
+  const { data: allData, isLoading: allLoading } = useFetch<ScheduleResponse>(
+    `https://site.api.espn.com/apis/site/v2/sports/soccer/all/teams/${teamId}/schedule`,
+    { execute: isSoccer && league !== "all" },
+  );
+
+  const byId = new Map<string, ScheduleEvent>();
+  for (const ev of [...(data?.events ?? []), ...(allData?.events ?? [])]) {
+    byId.set(ev.id, ev);
+  }
+  const events = [...byId.values()];
+
   const markdown = buildTeamMarkdown(
     teamId,
     {
@@ -589,7 +613,7 @@ function TeamDetailView({
 
   return (
     <Detail
-      isLoading={isLoading}
+      isLoading={isLoading || allLoading}
       markdown={markdown}
       navigationTitle={teamName}
       actions={
