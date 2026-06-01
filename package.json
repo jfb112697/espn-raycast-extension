@@ -1,7 +1,7 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "espn",
-  "description": "Shows sports schedules and stats using the ESPN API",
+  "name": "espn-sports",
+  "description": "Search ESPN teams and players for schedules, rosters, and stats",
   "license": "MIT",
   "scripts": {
     "dev": "ray develop",
@@ -45,7 +45,7 @@
       ]
     }
   ],
-  "title": "ESPN",
+  "title": "ESPN Sports",
   "author": "jeremy_blair",
   "platforms": [
     "Windows",
